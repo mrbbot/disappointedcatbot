@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
-	"strconv"
 	"strings"
 	"syscall"
 )
@@ -16,6 +15,7 @@ import (
 var (
 	dg      *discordgo.Session
 	numbers = []string{
+		"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
 		"0⃣ ", "1⃣", "2⃣", "3⃣", "4⃣", "5⃣", "6⃣", "7⃣", "8⃣", "9⃣",
 		"0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟",
 		"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
@@ -74,11 +74,7 @@ func stripMessage(m *discordgo.Message) string {
 }
 
 func isNumber(s string) bool {
-	if numberRegex.MatchString(s) {
-		return true
-	}
-	_, err := strconv.Atoi(s)
-	return err == nil
+	return numberRegex.MatchString(s)
 }
 
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
