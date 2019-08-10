@@ -3,15 +3,40 @@ package main
 import (
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/joho/godotenv/autoload"
+	"github.com/writeas/go-strip-markdown"
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 )
 
-var dg *discordgo.Session
+var (
+	dg      *discordgo.Session
+	numbers = []string{
+		"0⃣ ", "1⃣", "2⃣", "3⃣", "4⃣", "5⃣", "6⃣", "7⃣", "8⃣", "9⃣",
+		"0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟",
+		"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+		"eleven", "twelve", "thirteen", "fifteen",
+		"twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
+		"hundred", "thousand", "million", "billion", "trillion",
+	}
+	numberRegex *regexp.Regexp
+)
+
+func init() {
+	numberRegexString := "("
+	for i, number := range numbers {
+		numberRegexString += number
+		if i < len(numbers)-1 {
+			numberRegexString += "|"
+		}
+	}
+	numberRegexString += ")"
+	numberRegex = regexp.MustCompile(numberRegexString)
+}
 
 func main() {
 	// create bot client
@@ -40,6 +65,22 @@ func main() {
 	}
 }
 
+func stripMessage(m *discordgo.Message) string {
+	content := m.Content
+	content = strings.ToLower(content)
+	content = stripmd.Strip(content)
+	content = strings.TrimSpace(content)
+	return content
+}
+
+func isNumber(s string) bool {
+	if numberRegex.MatchString(s) {
+		return true
+	}
+	_, err := strconv.Atoi(s)
+	return err == nil
+}
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// ignore bots own messages
 	if m.Author.ID == s.State.User.ID {
@@ -58,16 +99,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 
-	trimmedCurrentContent := strings.TrimSpace(m.Content)
-	_, err = strconv.Atoi(trimmedCurrentContent)
-	currentIsNumber := err == nil
+	trimmedCurrentContent := stripMessage(m.Message)
+	currentIsNumber := isNumber(trimmedCurrentContent)
 
 	// count issues
 	issues := 0
 	for _, message := range messages {
-		trimmedContent := strings.TrimSpace(message.Content)
-		_, err = strconv.Atoi(trimmedContent)
-		isNumber := err == nil
+		trimmedContent := stripMessage(message)
+		isNumber := isNumber(trimmedContent)
 
 		if (trimmedCurrentContent == trimmedContent) || (currentIsNumber && isNumber) {
 			issues++
