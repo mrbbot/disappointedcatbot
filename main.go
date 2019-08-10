@@ -7,36 +7,11 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"syscall"
 )
 
-var (
-	dg      *discordgo.Session
-	numbers = []string{
-		"0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
-		"0⃣ ", "1⃣", "2⃣", "3⃣", "4⃣", "5⃣", "6⃣", "7⃣", "8⃣", "9⃣",
-		"0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟",
-		"zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
-		"eleven", "twelve", "thirteen", "fifteen",
-		"twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety",
-		"hundred", "thousand", "million", "billion", "trillion",
-	}
-	numberRegex *regexp.Regexp
-)
-
-func init() {
-	numberRegexString := "("
-	for i, number := range numbers {
-		numberRegexString += number
-		if i < len(numbers)-1 {
-			numberRegexString += "|"
-		}
-	}
-	numberRegexString += ")"
-	numberRegex = regexp.MustCompile(numberRegexString)
-}
+var dg *discordgo.Session
 
 func main() {
 	// create bot client
@@ -73,10 +48,6 @@ func stripMessage(m *discordgo.Message) string {
 	return content
 }
 
-func isNumber(s string) bool {
-	return numberRegex.MatchString(s)
-}
-
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	// ignore bots own messages
 	if m.Author.ID == s.State.User.ID {
@@ -96,15 +67,13 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	trimmedCurrentContent := stripMessage(m.Message)
-	currentIsNumber := isNumber(trimmedCurrentContent)
 
 	// count issues
 	issues := 0
 	for _, message := range messages {
 		trimmedContent := stripMessage(message)
-		isNumber := isNumber(trimmedContent)
 
-		if (trimmedCurrentContent == trimmedContent) || (currentIsNumber && isNumber) {
+		if trimmedCurrentContent == trimmedContent {
 			issues++
 		}
 	}
