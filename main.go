@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/joho/godotenv/autoload"
 	"github.com/writeas/go-strip-markdown"
@@ -10,28 +11,38 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
-type ReplacementResponse struct {
-	From     string `json:"from"`
-	To       string `json:"to"`
-	IsRegexp bool   `json:"regexp,omitempty"`
+type Command struct {
+	Command    string `json:"command"`
+	Response   string `json:"response"`
+	IsRegexp   bool   `json:"regexp,omitempty"`
+	Contains   bool   `json:"contains,omitempty"`
+	ShowTyping bool   `json:"typing,omitempty"`
 
 	regexp *regexp.Regexp
 }
 
-func (r *ReplacementResponse) Regexp() *regexp.Regexp {
+func (r *Command) Regexp() *regexp.Regexp {
 	if r.regexp == nil {
-		r.regexp = regexp.MustCompile(r.From)
+		r.regexp = regexp.MustCompile(r.Command)
 	}
 	return r.regexp
 }
 
+func (r *Command) String() string {
+	return fmt.Sprintf(
+		"(%s -> %s (is regexp: %t, contains: %t, show typing: %t))",
+		r.Command, r.Response, r.IsRegexp, r.Contains, r.ShowTyping,
+	)
+}
+
 type Config struct {
-	Replacements []*ReplacementResponse `json:"replacements,omitempty"`
-	Responses    []*ReplacementResponse `json:"responses,omitempty"`
+	Commands []*Command `json:"commands,omitempty"`
 }
 
 var (
@@ -130,35 +141,39 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		log.Printf("err performing message action: %v", err)
 	}
 
-	// make replacements
-	originalContent := m.Content
-	newContent := m.Content
-	for _, replacement := range config.Replacements {
-		if replacement.IsRegexp {
-			newContent = replacement.Regexp().ReplaceAllString(newContent, replacement.To)
-		} else {
-			newContent = strings.ReplaceAll(newContent, replacement.From, replacement.To)
+	// check & send command responses
+	for _, command := range config.Commands {
+		var response string
+		if command.IsRegexp {
+			submatch := command.Regexp().FindStringSubmatch(m.Content)
+			if len(submatch) > 0 {
+				response = command.Response
+				for i, submatchPart := range submatch {
+					response = strings.ReplaceAll(response, "$"+strconv.Itoa(i), submatchPart)
+				}
+			}
+		} else if (command.Contains && strings.Contains(trimmedCurrentContent, command.Command)) || (!command.Contains && trimmedCurrentContent == command.Command) {
+			response = command.Response
 		}
-	}
-	if newContent != originalContent {
-		_, err = dg.ChannelMessageEdit(m.ChannelID, m.ID, newContent)
-		if err != nil {
-			log.Printf("err editing message: %v", err)
-		}
-	}
-
-	// send responses
-	for _, response := range config.Responses {
-		var contains bool
-		if response.IsRegexp {
-			contains = response.Regexp().MatchString(originalContent)
-		} else {
-			contains = strings.Contains(originalContent, response.From)
-		}
-		if contains {
-			_, err = dg.ChannelMessageSend(m.ChannelID, response.To)
-			if err != nil {
-				log.Printf("err sending message: %v", err)
+		if response != "" {
+			if command.ShowTyping {
+				err = dg.ChannelTyping(m.ChannelID)
+				if err != nil {
+					log.Printf("err sending typing indicator: %v", err)
+				} else {
+					go func() {
+						time.Sleep(time.Second)
+						_, err = dg.ChannelMessageSend(m.ChannelID, response)
+						if err != nil {
+							log.Printf("err sending message: %v", err)
+						}
+					}()
+				}
+			} else {
+				_, err = dg.ChannelMessageSend(m.ChannelID, response)
+				if err != nil {
+					log.Printf("err sending message: %v", err)
+				}
 			}
 		}
 	}
