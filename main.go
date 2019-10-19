@@ -42,7 +42,9 @@ func (r *Command) String() string {
 }
 
 type Config struct {
-	Commands []*Command `json:"commands,omitempty"`
+	Commands         []*Command      `json:"commands,omitempty"`
+	ExcludedChannels map[string]bool `json:"excluded_channels,omitempty"`
+	ExcludedUsers    map[string]bool `json:"excluded_users,omitempty"`
 }
 
 var (
@@ -106,6 +108,14 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	// ignore empty messages (e.g. images)
 	if m.Content == "" {
+		return
+	}
+
+	// ignore excluded channels/users
+	if v, _ := config.ExcludedChannels[m.ChannelID]; v {
+		return
+	}
+	if v, _ := config.ExcludedUsers[m.Author.ID]; v {
 		return
 	}
 
